@@ -498,6 +498,21 @@ A8(char *S, size_t Ln)
 #define SLLStackPush(f, n) SLLStackPush_N(f, n, Next)
 #define SLLStackPop(f) SLLStackPop_N(f, Next)
 
+//~ rjf: Vector Types
+
+//- rjf: 2-vectors
+
+typedef union v2u32 v2u32;
+union v2u32
+{
+ struct
+ {
+  uint32_t X;
+  uint32_t Y;
+ };
+ uint32_t V[2];
+};
+
 // Mem stuff
 
 static int32_t
@@ -1092,7 +1107,8 @@ typedef uint32_t jc_tkn_kind;
 typedef enum
 {
  // compiler tokens
- JcTknErr,
+ //todo not sure why err 0 and not eof 0, would be nice if jctknarreat returned jctknzero to signify eof, but matklad resil parse article does this way
+ JcTknErr, 
  JcTknEof,
 
  // tokens for no loss
@@ -1167,6 +1183,15 @@ typedef enum
  JcTknCount,
 } jc_tkn_kind;
 
+typedef uint8_t jc_tkn_bp;
+enum
+{
+ JcBpAmbiguous, // default to ambiguous
+ JcBpLeftTighter,
+ JcBpRightTighter,
+};
+jc_tkn_bp JcBpTab[JcTknCount][JcTknCount] = {0};
+
 a8 JcTknTab[JcTknCount] = {0};
 
 typedef struct jc_tkn jc_tkn;
@@ -1175,6 +1200,9 @@ struct jc_tkn
  jc_tkn_kind Kind;
  char *Mem;
  size_t Ln;
+
+ jc_tkn *Next;
+ jc_tkn *First;
 };
 
 typedef struct jc_tkn_arr jc_tkn_arr;
@@ -1189,6 +1217,15 @@ static jc_tkn
 JcTkn(jc_tkn_kind Kind, char *Mem, size_t Ln)
 {
  return (jc_tkn){.Kind = Kind, .Mem = Mem, .Ln = Ln};
+}
+
+static void
+JcBpTabInit()
+{
+ JcBpTab[JcTknAsterisk][JcTknPlus] = JcBpLeftTighter;
+ JcBpTab[JcTknPlus][JcTknAsterisk] = JcBpRightTighter;
+ JcBpTab[JcTknHws][JcTknPlus] = JcBpRightTighter;
+ JcBpTab[JcTknHws][JcTknAsterisk] = JcBpRightTighter;
 }
 
 static void
@@ -1378,10 +1415,122 @@ TknArrPush(jc_tkn_arr *Arr, jc_tkn *Tkn)
  Arr->Ln++;
 }
 
+static jc_tkn JcTknGlobalZero = {0};
+static jc_tkn JcTknGlobalEof = { .Kind = JcTknEof };
+
+static uint32_t
+JcTknKindIsExprRelevant(jc_tkn_kind Kind)
+{
+ return Kind != JcTknHws && Kind != JcTknVws;
+}
+
+static jc_tkn *
+JcTknArrPeek(jc_tkn_arr *TknArr)
+{
+ jc_tkn *Ret = &JcTknGlobalEof;
+ if (TknArr->Ln)
+ {
+  jc_tkn *Ret = TknArr->Mem;
+ }
+ return Ret;
+}
+
+static jc_tkn *
+JcTknArrPeekRelevant(jc_tkn_arr *TknArr)
+{
+ jc_tkn *Ret = &JcTknGlobalEof;
+ for (size_t I = 0; I < TknArr->Ln; ++I)
+ {
+  if (JcTknKindIsExprRelevant(TknArr->Mem[I].Kind))
+  {
+   Ret = TknArr->Mem + I;
+   break;
+  }
+ }
+ return Ret;
+}
+
+static jc_tkn *
+JcTknArrEat(jc_tkn_arr *TknArr)
+{
+ jc_tkn *Ret = &JcTknGlobalEof;
+ if (TknArr->Ln)
+ {
+  Ret = TknArr->Mem;
+  TknArr->Mem++;
+  TknArr->Ln--;
+ }
+ return Ret;
+}
+
+static jc_tkn *
+JcTknArrEatRelevant(jc_tkn_arr *TknArr)
+{
+ jc_tkn *Ret = 0;
+ while ((Ret = JcTknArrEat(TknArr)) && !JcTknKindIsExprRelevant(Ret->Kind))
+ {
+ }
+ return Ret;
+}
+
+static void
+JcTknPrint(jc_tkn *Tkn)
+{
+ printf("Ln: %zd, %.*s\n", Tkn->Ln, (int)Tkn->Ln, Tkn->Mem);
+}
+
+static uint32_t
+JcOpRightBindsTighter(jc_tkn_kind OpL, jc_tkn_kind OpR)
+{
+ if (OpL >= JcTknCount || OpR >= JcTknCount)
+ {
+  return JcBpAmbiguous;
+ }
+
+ jc_tkn_bp Bp = JcBpTab[OpL][OpR];
+ return Bp == JcBpRightTighter;
+}
+
+static jc_tkn *
+JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
+{
+ jc_tkn *Lhs = JcTknArrEatRelevant(TknView);
+ if (Lhs->Kind != JcTknNum)
+ {
+  puts("Error wrong start tkn");
+  return 0;
+ }
+
+ for (;;)
+ {
+  jc_tkn *Op = JcTknArrPeekRelevant(TknView);
+  if (Op->Kind == JcTknEof)
+  {
+   break;
+  }
+
+  if (JcOpRightBindsTighter(OpL, Op->Kind))
+  {
+   JcTknArrEatRelevant(TknView);
+   jc_tkn *Rhs = JcExprRecursive(TknView, Op->Kind);
+   // todo proper inserts
+   Op->First = Lhs;
+   Lhs->Next = Rhs;
+   Lhs = Op;
+  }
+  else
+  {
+   break;
+  }
+ }
+ return Lhs;
+}
+
 int
 wmain(int Argc, wchar_t **Argv)
 {
  OS_Init(&OS_W32State);
+ JcBpTabInit();
  JcTknTabInit();
 
  uint32_t FileLn = 0;
@@ -1418,12 +1567,10 @@ wmain(int Argc, wchar_t **Argv)
   }
  }
 
- for (size_t I = 0; I < TknArr->Ln; ++I)
- {
-  jc_tkn Tkn = TknArr->Mem[I];
-  
-  printf("tkn: %.*s\n", (int)Tkn.Ln, Tkn.Mem);
- }
+ jc_tkn_arr TknView = *TknArr;
+ jc_tkn *Res = JcExprRecursive(&TknView, JcTknHws);
+
+ puts("done");
 
  return 0;
 }
