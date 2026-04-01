@@ -1173,7 +1173,7 @@ typedef struct jc_tkn jc_tkn;
 struct jc_tkn
 {
  jc_tkn_kind Kind;
- char *Start;
+ char *Mem;
  size_t Ln;
 };
 
@@ -1186,9 +1186,9 @@ struct jc_tkn_arr
 };
 
 static jc_tkn
-JcTkn(jc_tkn_kind Kind, char *Start, size_t Ln)
+JcTkn(jc_tkn_kind Kind, char *Mem, size_t Ln)
 {
- return (jc_tkn){.Kind = Kind, .Start = Start, .Ln = Ln};
+ return (jc_tkn){.Kind = Kind, .Mem = Mem, .Ln = Ln};
 }
 
 static void
@@ -1294,7 +1294,7 @@ A8EatPunctuatorMut(a8 *A, jc_tkn *Out)
   {
    *Out = (jc_tkn){
     .Kind = I,
-    .Start = Start,
+    .Mem = Start,
     .Ln = Prefix.Ln,
    };
    return 1;
@@ -1366,6 +1366,18 @@ A8EatVwsMut(a8 *A, jc_tkn *Out)
  return 0;
 }
 
+static void
+TknArrPush(jc_tkn_arr *Arr, jc_tkn *Tkn)
+{
+ jc_tkn *Mem = ArPush(Arr->Ar, jc_tkn, 1);
+ if (!Arr->Mem)
+ {
+  Arr->Mem = Mem;
+ }
+ *Mem = *Tkn;
+ Arr->Ln++;
+}
+
 int
 wmain(int Argc, wchar_t **Argv)
 {
@@ -1395,12 +1407,22 @@ wmain(int Argc, wchar_t **Argv)
    A8EatIdentMut(&Slice, &Tkn) ||
    A8EatNumMut(&Slice, &Tkn)
   );
-  if (!Res)
+  if (Res)
+  {
+   TknArrPush(TknArr, &Tkn);
+  }
+  else
   {
    puts("failed");
    break;
   }
-  printf("Length: %zd, %.*s\n", Tkn.Ln, (int)Tkn.Ln, Tkn.Start);
+ }
+
+ for (size_t I = 0; I < TknArr->Ln; ++I)
+ {
+  jc_tkn Tkn = TknArr->Mem[I];
+  
+  printf("tkn: %.*s\n", (int)Tkn.Ln, Tkn.Mem);
  }
 
  return 0;
