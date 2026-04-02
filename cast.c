@@ -1257,7 +1257,7 @@ JcBpTabInit()
  JcBpTab[JcTknPostfixIncrement] = V2U8(31, 0);
  JcBpTab[JcTknPostfixDecrement] = V2U8(31, 0);
  // todo fn call ()
- // todo array subscript []
+ JcBpTab[JcTknLBrack] = V2U8(31, 0);
  JcBpTab[JcTknMemberAccess] = V2U8(31, 32);
  JcBpTab[JcTknPtrMemberAccess] = V2U8(31, 32);
  // todo compound literal (type){list}
@@ -1720,12 +1720,29 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
   {
    JcTknArrEatRelevant(TknView);
 
-   // postfix unary or binary?
+   // postfix unary, arr subscript, or binary?
    if (Op->Kind == JcTknPostfixIncrement || Op->Kind == JcTknPostfixDecrement)
    {
     // todo proper inserts
     Op->First = Lhs;
     Lhs = Op;
+   }
+   else if (Op->Kind == JcTknLBrack)
+   {
+    jc_tkn *Rhs = JcExprRecursive(TknView, JcTknEof);
+    jc_tkn *RBrack = JcTknArrEatRelevant(TknView);
+    if (RBrack->Kind == JcTknRBrack)
+    {
+     // todo proper inserts
+     Op->First = Lhs;
+     Lhs->Next = Rhs;
+     Lhs = Op;
+    }
+    else
+    {
+     puts("Error expected closing bracket");
+     return 0;
+    }
    }
    else
    {
