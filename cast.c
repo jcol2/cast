@@ -1192,7 +1192,7 @@ typedef enum
  JcTknStringizing,
  JcTknSemicolon,
  JcTknColon,
- JcTknQuestion,
+ JcTknTernary,
  JcTknMemberAccess,
  JcTknBitwiseNot,
  JcTknLogicalNot,
@@ -1302,7 +1302,7 @@ JcBpTabInit()
 
  JcBpTab[JcTknLogicalOr] = V2U8(7, 8);
 
- // todo ternary (6, 5)
+ JcBpTab[JcTknTernary] = V2U8(6, 5);
 
  JcBpTab[JcTknAssignment] = V2U8(4, 3);
  JcBpTab[JcTknMultiplyAssignment] = V2U8(4, 3);
@@ -1344,7 +1344,7 @@ JcTknTabInit()
  JcTknTab[JcTknSemicolon] = CStr(";");
  JcTknTab[JcTknColon] = CStr(":");
  JcTknTab[JcTknEllipsis] = CStr("...");
- JcTknTab[JcTknQuestion] = CStr("?");
+ JcTknTab[JcTknTernary] = CStr("?");
  JcTknTab[JcTknDoubleColon] = CStr("::");
  JcTknTab[JcTknMemberAccess] = CStr(".");
  JcTknTab[JcTknPtrMemberAccess] = CStr("->");
@@ -1587,7 +1587,29 @@ JcTknArrEatRelevant(jc_tkn_arr *TknArr)
 static void
 JcTknPrintMut(a8 *A, jc_tkn *Tkn)
 {
- if (Tkn->First && Tkn->First->Next)
+ if (Tkn->First && Tkn->First->Next && Tkn->First->Next->Next)
+ {
+  // ternary
+  a8 TknStr = JcTknTab[Tkn->Kind];
+  int WriteLn = sprintf_s(A->Mem, A->Ln, "(%s ", TknStr.Mem);
+  A8ShlMut(A, WriteLn);
+
+  JcTknPrintMut(A, Tkn->First);
+
+  WriteLn = sprintf_s(A->Mem, A->Ln, " ");
+  A8ShlMut(A, WriteLn);
+
+  JcTknPrintMut(A, Tkn->First->Next);
+
+  WriteLn = sprintf_s(A->Mem, A->Ln, " ");
+  A8ShlMut(A, WriteLn);
+
+  JcTknPrintMut(A, Tkn->First->Next->Next);
+
+  WriteLn = sprintf_s(A->Mem, A->Ln, ")");
+  A8ShlMut(A, WriteLn);
+ }
+ else if (Tkn->First && Tkn->First->Next)
  {
   // binary op
   a8 TknStr = JcTknTab[Tkn->Kind];
@@ -1741,6 +1763,25 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
     else
     {
      puts("Error expected closing bracket");
+     return 0;
+    }
+   }
+   else if (Op->Kind == JcTknTernary)
+   {
+    jc_tkn *Mhs = JcExprRecursive(TknView, JcTknEof);
+    jc_tkn *Colon = JcTknArrEatRelevant(TknView);
+    if (Colon->Kind == JcTknColon)
+    {
+     jc_tkn *Rhs = JcExprRecursive(TknView, Op->Kind);
+     // todo proper inserts
+     Op->First = Lhs;
+     Lhs->Next = Mhs;
+     Mhs->Next = Rhs;
+     Lhs = Op;
+    }
+    else
+    {
+     puts("Error expected colon for ternary");
      return 0;
     }
    }

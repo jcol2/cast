@@ -38,6 +38,7 @@ Test()
  TestExprRecursive(&FailCnt, CStr("++5-- + +3"), CStr("(+ (++ (-- 5)) (+ 3))"));
  TestExprRecursive(&FailCnt, CStr("(((3)))"), CStr("3"));
  TestExprRecursive(&FailCnt, CStr("10[1]"), CStr("([ 10 1)"));
+ TestExprRecursive(&FailCnt, CStr("1 ? 100 : 5 ? 2 : 3"), CStr("(? 1 100 (? 5 2 3))"));
 
  printf("%zd failed\n", FailCnt);
 }
