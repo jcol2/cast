@@ -1638,10 +1638,14 @@ JcOpInfixRightBindsTighter(jc_tkn_kind OpL, jc_tkn_kind OpR)
   return 0;
  }
 
- uint8_t BpL = JcBpTab[OpL].Y;
- uint8_t BpR = JcBpTab[OpR].X;
-
- return BpR > BpL;
+ v2u8 BpL = JcBpTab[OpL];
+ v2u8 BpR = JcBpTab[OpR];
+ // both should have at least one set, let JcTknEof through
+ if ((OpL == JcTknEof || (BpL.X || BpL.Y)) && (BpR.X || BpR.Y))
+ {
+  return BpR.X > BpL.Y;
+ }
+ return 0;
 }
 
 static jc_tkn_arr *
@@ -1687,6 +1691,16 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
   Lhs->Kind = PrefixKind;
   jc_tkn *Rhs = JcExprRecursive(TknView, Lhs->Kind);
   Lhs->First = Rhs;
+ }
+ else if (Lhs->Kind == JcTknLParen)
+ {
+  Lhs = JcExprRecursive(TknView, JcTknEof);
+  jc_tkn *RParen = JcTknArrEatRelevant(TknView);
+  if (RParen->Kind != JcTknRParen)
+  {
+   puts("Error no closing paren found");
+   return 0;
+  }
  }
  else if (Lhs->Kind != JcTknNum)
  {
@@ -1751,7 +1765,7 @@ wmain(int Argc, wchar_t **Argv)
  jc_tkn_arr *TknArr = JcLex(Ar, TknAr, File, FileLn);
 
  jc_tkn_arr TknView = *TknArr;
- jc_tkn *Res = JcExprRecursive(&TknView, JcTknHws);
+ jc_tkn *Res = JcExprRecursive(&TknView, JcTknEof);
 
  puts("done");
 

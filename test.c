@@ -9,7 +9,7 @@ TestExprRecursive(size_t *FailCnt, a8 Input, a8 Expect)
  jc_tkn_arr *TknArr = JcLex(Tmp.Ar, Tmp.Ar, Input.Mem, Input.Ln);
 
  jc_tkn_arr TknView = *TknArr;
- jc_tkn *Res = JcExprRecursive(&TknView, JcTknHws);
+ jc_tkn *Res = JcExprRecursive(&TknView, JcTknEof);
 
  a8 ResStr = ArPushA8(Tmp.Ar, 100000);
  JcTknPrint(ResStr, Res);
@@ -36,6 +36,7 @@ Test()
  TestExprRecursive(&FailCnt, CStr("5 * 1 + 3"), CStr("(+ (* 5 1) 3)"));
  TestExprRecursive(&FailCnt, CStr("5 * 6 + 1 * 3"), CStr("(+ (* 5 6) (* 1 3))"));
  TestExprRecursive(&FailCnt, CStr("++5-- + +3"), CStr("(+ (++ (-- 5)) (+ 3))"));
+ TestExprRecursive(&FailCnt, CStr("(((3)))"), CStr("3"));
 
  printf("%zd failed\n", FailCnt);
 }
