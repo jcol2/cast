@@ -514,6 +514,29 @@ union v2u32
  uint32_t V[2];
 };
 
+typedef union v2u8 v2u8;
+union v2u8
+{
+ struct
+ {
+  uint8_t X;
+  uint8_t Y;
+ };
+ uint8_t V[2];
+};
+
+static v2u8
+V2U8(uint8_t X, uint8_t Y)
+{
+ return (v2u8){.X = X, .Y = Y};
+}
+
+static v2u32
+V2U32(uint32_t X, uint32_t Y)
+{
+ return (v2u32){.X = X, .Y = Y};
+}
+
 // Mem stuff
 
 static int32_t
@@ -1128,72 +1151,80 @@ typedef enum
 
  // punctuators
  // ln 3
- JcTknDoubleLessThanEqual,
- JcTknDoubleGreaterThanEqual,
+ JcTknShiftLeftAssignment,
+ JcTknShiftRightAssignment,
  JcTknEllipsis,
 
  // ln 2
  JcTknLessThanEqual,
  JcTknGreaterThanEqual,
- JcTknDoubleAmpersand,
- JcTknDoublePipe,
- JcTknDoubleLessThan,
- JcTknDoubleGreaterThan,
- JcTknDoublePlus,
- JcTknDoubleMinus,
- JcTknDashGreaterThan,
- JcTknDoubleColon,
- JcTknDoublePound,
- JcTknPlusEqual,
- JcTknMinusEqual,
- JcTknAsteriskEqual,
- JcTknSolidusEqual,
- JcTknPercentEqual,
- JcTknCaretEqual,
- JcTknAmpersandEqual,
- JcTknPipeEqual,
- JcTknDoubleEqual,
- JcTknExclamationEqual,
+ JcTknLogicalAnd,
+ JcTknLogicalOr,
+ JcTknShiftLeft,
+ JcTknShiftRight,
+
+ JcTknPostfixIncrement,
+ JcTknPostfixDecrement,
+ JcTknPrefixIncrement,
+ JcTknPrefixDecrement,
+
+ JcTknPtrMemberAccess,
+ JcTknDoubleColon,//?
+ JcTknTokenPasting,
+ JcTknAddAssignment,
+ JcTknSubtractAssignment,
+ JcTknMultiplyAssignment,
+ JcTknDivideAssignment,
+ JcTknModuloAssignment,
+ JcTknBitwiseXorAssignment,
+ JcTknBitwiseAndAssignment,
+ JcTknBitwiseOrAssignment,
+ JcTknCompareEqual,
+ JcTknCompareNotEqual,
 
  // ln 1
  JcTknLCurly,
  JcTknRCurly,
  JcTknLBrack,
  JcTknRBrack,
- JcTknPound,
  JcTknLParen,
  JcTknRParen,
+ JcTknStringizing,
  JcTknSemicolon,
  JcTknColon,
  JcTknQuestion,
- JcTknPeriod,
- JcTknTilde,
- JcTknExclamation,
- JcTknPlus,
- JcTknMinus,
- JcTknAsterisk,
- JcTknSolidus,
- JcTknPercent,
- JcTknCaret,
- JcTknAmpersand,
- JcTknPipe,
- JcTknEqual,
+ JcTknMemberAccess,
+ JcTknBitwiseNot,
+ JcTknLogicalNot,
+
+ JcTknAdd,
+ JcTknUnaryAdd,
+ JcTknSubtract,
+ JcTknUnarySubtract,
+
+ JcTknMultiply,
+ JcTknDereference,
+
+ JcTknDivide,
+ JcTknModulo,
+ JcTknBitwiseXor,
+ 
+ JcTknBitwiseAnd,
+ JcTknAddressOf,
+
+ JcTknBitwiseOr,
+ JcTknAssignment,
  JcTknLessThan,
  JcTknGreaterThan,
  JcTknComma,
+
  JcTknCount,
 } jc_tkn_kind;
 
-typedef uint8_t jc_tkn_bp;
-enum
-{
- JcBpAmbiguous, // default to ambiguous
- JcBpLeftTighter,
- JcBpRightTighter,
-};
-jc_tkn_bp JcBpTab[JcTknCount][JcTknCount] = {0};
+v2u8 JcBpTab[JcTknCount] = {0};
 
 a8 JcTknTab[JcTknCount] = {0};
+jc_tkn_kind JcPrefixTab[JcTknCount] = {0};
 
 typedef struct jc_tkn jc_tkn;
 struct jc_tkn
@@ -1223,10 +1254,80 @@ JcTkn(jc_tkn_kind Kind, char *Mem, size_t Ln)
 static void
 JcBpTabInit()
 {
- JcBpTab[JcTknAsterisk][JcTknPlus] = JcBpLeftTighter;
- JcBpTab[JcTknPlus][JcTknAsterisk] = JcBpRightTighter;
- JcBpTab[JcTknHws][JcTknPlus] = JcBpRightTighter;
- JcBpTab[JcTknHws][JcTknAsterisk] = JcBpRightTighter;
+ JcBpTab[JcTknPostfixIncrement] = V2U8(31, 0);
+ JcBpTab[JcTknPostfixDecrement] = V2U8(31, 0);
+ // todo fn call ()
+ // todo array subscript []
+ JcBpTab[JcTknMemberAccess] = V2U8(31, 32);
+ JcBpTab[JcTknPtrMemberAccess] = V2U8(31, 32);
+ // todo compound literal (type){list}
+
+ JcBpTab[JcTknPrefixIncrement] = V2U8(0, 29);
+ JcBpTab[JcTknPrefixDecrement] = V2U8(0, 29);
+ JcBpTab[JcTknUnaryAdd] = V2U8(0, 29);
+ JcBpTab[JcTknUnarySubtract] = V2U8(0, 29);
+ JcBpTab[JcTknLogicalNot] = V2U8(30, 29);
+ JcBpTab[JcTknBitwiseNot] = V2U8(30, 29);
+ JcBpTab[JcTknDereference] = V2U8(0, 29);
+ JcBpTab[JcTknAddressOf] = V2U8(0, 29);
+ // todo sizeof, alignof (30, 29)
+
+ // todo typecast (28, 27)
+
+ JcBpTab[JcTknMultiply] = V2U8(25, 26);
+ JcBpTab[JcTknDivide] = V2U8(25, 26);
+ JcBpTab[JcTknModulo] = V2U8(25, 26);
+
+ JcBpTab[JcTknAdd] = V2U8(23, 24);
+ JcBpTab[JcTknSubtract] = V2U8(23, 24);
+
+ JcBpTab[JcTknShiftLeft] = V2U8(21, 22);
+ JcBpTab[JcTknShiftRight] = V2U8(21, 22);
+
+ JcBpTab[JcTknLessThan] = V2U8(19, 20);
+ JcBpTab[JcTknGreaterThan] = V2U8(19, 20);
+ JcBpTab[JcTknLessThanEqual] = V2U8(19, 20);
+ JcBpTab[JcTknGreaterThanEqual] = V2U8(19, 20);
+
+ JcBpTab[JcTknCompareEqual] = V2U8(17, 18);
+ JcBpTab[JcTknCompareNotEqual] = V2U8(17, 18);
+
+ JcBpTab[JcTknBitwiseAnd] = V2U8(15, 16);
+
+ JcBpTab[JcTknBitwiseXor] = V2U8(13, 14);
+
+ JcBpTab[JcTknBitwiseOr] = V2U8(11, 12);
+
+ JcBpTab[JcTknLogicalAnd] = V2U8(9, 10);
+
+ JcBpTab[JcTknLogicalOr] = V2U8(7, 8);
+
+ // todo ternary (6, 5)
+
+ JcBpTab[JcTknAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknMultiplyAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknDivideAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknAddAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknSubtractAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknModuloAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknShiftLeftAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknShiftRightAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknBitwiseAndAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknBitwiseXorAssignment] = V2U8(4, 3);
+ JcBpTab[JcTknBitwiseOrAssignment] = V2U8(4, 3);
+
+ JcBpTab[JcTknComma] = V2U8(1, 2);
+}
+
+static void
+JcPrefixTabInit()
+{
+ JcPrefixTab[JcTknAdd] = JcTknUnaryAdd;
+ JcPrefixTab[JcTknSubtract] = JcTknUnarySubtract;
+ JcPrefixTab[JcTknMultiply] = JcTknDereference;
+ JcPrefixTab[JcTknBitwiseAnd] = JcTknAddressOf;
+ JcPrefixTab[JcTknPostfixDecrement] = JcTknPrefixDecrement;
+ JcPrefixTab[JcTknPostfixIncrement] = JcTknPrefixIncrement;
 }
 
 static void
@@ -1236,8 +1337,8 @@ JcTknTabInit()
  JcTknTab[JcTknRCurly] = CStr("}");
  JcTknTab[JcTknLBrack] = CStr("[");
  JcTknTab[JcTknRBrack] = CStr("]");
- JcTknTab[JcTknPound] = CStr("#");
- JcTknTab[JcTknDoublePound] = CStr("##");
+ JcTknTab[JcTknStringizing] = CStr("#");
+ JcTknTab[JcTknTokenPasting] = CStr("##");
  JcTknTab[JcTknLParen] = CStr("(");
  JcTknTab[JcTknRParen] = CStr(")");
  JcTknTab[JcTknSemicolon] = CStr(";");
@@ -1245,42 +1346,49 @@ JcTknTabInit()
  JcTknTab[JcTknEllipsis] = CStr("...");
  JcTknTab[JcTknQuestion] = CStr("?");
  JcTknTab[JcTknDoubleColon] = CStr("::");
- JcTknTab[JcTknPeriod] = CStr(".");
- JcTknTab[JcTknDashGreaterThan] = CStr("->");
- JcTknTab[JcTknTilde] = CStr("~");
- JcTknTab[JcTknExclamation] = CStr("!");
- JcTknTab[JcTknPlus] = CStr("+");
- JcTknTab[JcTknMinus] = CStr("-");
- JcTknTab[JcTknAsterisk] = CStr("*");
- JcTknTab[JcTknSolidus] = CStr("/");
- JcTknTab[JcTknPercent] = CStr("%");
- JcTknTab[JcTknCaret] = CStr("^");
- JcTknTab[JcTknAmpersand] = CStr("&");
- JcTknTab[JcTknPipe] = CStr("|");
- JcTknTab[JcTknEqual] = CStr("=");
- JcTknTab[JcTknPlusEqual] = CStr("+=");
- JcTknTab[JcTknMinusEqual] = CStr("-=");
- JcTknTab[JcTknAsteriskEqual] = CStr("*=");
- JcTknTab[JcTknSolidusEqual] = CStr("/=");
- JcTknTab[JcTknPercentEqual] = CStr("%=");
- JcTknTab[JcTknCaretEqual] = CStr("^=");
- JcTknTab[JcTknAmpersandEqual] = CStr("&=");
- JcTknTab[JcTknPipeEqual] = CStr("|=");
- JcTknTab[JcTknDoubleEqual] = CStr("==");
- JcTknTab[JcTknExclamationEqual] = CStr("!=");
+ JcTknTab[JcTknMemberAccess] = CStr(".");
+ JcTknTab[JcTknPtrMemberAccess] = CStr("->");
+ JcTknTab[JcTknBitwiseNot] = CStr("~");
+ JcTknTab[JcTknLogicalNot] = CStr("!");
+ JcTknTab[JcTknAdd] = CStr("+");
+ JcTknTab[JcTknSubtract] = CStr("-");
+ JcTknTab[JcTknMultiply] = CStr("*");
+ JcTknTab[JcTknDivide] = CStr("/");
+ JcTknTab[JcTknModulo] = CStr("%");
+ JcTknTab[JcTknBitwiseXor] = CStr("^");
+ JcTknTab[JcTknBitwiseAnd] = CStr("&");
+ JcTknTab[JcTknBitwiseOr] = CStr("|");
+ JcTknTab[JcTknAssignment] = CStr("=");
+ JcTknTab[JcTknAddAssignment] = CStr("+=");
+ JcTknTab[JcTknSubtractAssignment] = CStr("-=");
+ JcTknTab[JcTknMultiplyAssignment] = CStr("*=");
+ JcTknTab[JcTknDivideAssignment] = CStr("/=");
+ JcTknTab[JcTknModuloAssignment] = CStr("%=");
+ JcTknTab[JcTknBitwiseXorAssignment] = CStr("^=");
+ JcTknTab[JcTknBitwiseAndAssignment] = CStr("&=");
+ JcTknTab[JcTknBitwiseOrAssignment] = CStr("|=");
+ JcTknTab[JcTknCompareEqual] = CStr("==");
+ JcTknTab[JcTknCompareNotEqual] = CStr("!=");
  JcTknTab[JcTknLessThan] = CStr("<");
  JcTknTab[JcTknGreaterThan] = CStr(">");
  JcTknTab[JcTknLessThanEqual] = CStr("<=");
  JcTknTab[JcTknGreaterThanEqual] = CStr(">=");
- JcTknTab[JcTknDoubleAmpersand] = CStr("&&");
- JcTknTab[JcTknDoublePipe] = CStr("||");
- JcTknTab[JcTknDoubleLessThan] = CStr("<<");
- JcTknTab[JcTknDoubleGreaterThan] = CStr(">>");
- JcTknTab[JcTknDoubleLessThanEqual] = CStr("<<=");
- JcTknTab[JcTknDoubleGreaterThanEqual] = CStr(">>=");
- JcTknTab[JcTknDoublePlus] = CStr("++");
- JcTknTab[JcTknDoubleMinus] = CStr("--");
+ JcTknTab[JcTknLogicalAnd] = CStr("&&");
+ JcTknTab[JcTknLogicalOr] = CStr("||");
+ JcTknTab[JcTknShiftLeft] = CStr("<<");
+ JcTknTab[JcTknShiftRight] = CStr(">>");
+ JcTknTab[JcTknShiftLeftAssignment] = CStr("<<=");
+ JcTknTab[JcTknShiftRightAssignment] = CStr(">>=");
+ JcTknTab[JcTknPostfixIncrement] = CStr("++");
+ JcTknTab[JcTknPostfixDecrement] = CStr("--");
  JcTknTab[JcTknComma] = CStr(",");
+
+ JcTknTab[JcTknUnaryAdd] = CStr("+");
+ JcTknTab[JcTknUnarySubtract] = CStr("-");
+ JcTknTab[JcTknDereference] = CStr("*");
+ JcTknTab[JcTknAddressOf] = CStr("&");
+ JcTknTab[JcTknPrefixDecrement] = CStr("--");
+ JcTknTab[JcTknPrefixIncrement] = CStr("++");
 }
 
 static void
@@ -1496,6 +1604,18 @@ JcTknPrintMut(a8 *A, jc_tkn *Tkn)
   WriteLn = sprintf_s(A->Mem, A->Ln, ")");
   A8ShlMut(A, WriteLn);
  }
+ else if (Tkn->First)
+ {
+  // unary op
+  a8 TknStr = JcTknTab[Tkn->Kind];
+  int WriteLn = sprintf_s(A->Mem, A->Ln, "(%s ", TknStr.Mem);
+  A8ShlMut(A, WriteLn);
+
+  JcTknPrintMut(A, Tkn->First);
+
+  WriteLn = sprintf_s(A->Mem, A->Ln, ")");
+  A8ShlMut(A, WriteLn);
+ }
  else
  {
   // atomic
@@ -1511,15 +1631,17 @@ JcTknPrint(a8 A, jc_tkn *Tkn)
 }
 
 static uint32_t
-JcOpRightBindsTighter(jc_tkn_kind OpL, jc_tkn_kind OpR)
+JcOpInfixRightBindsTighter(jc_tkn_kind OpL, jc_tkn_kind OpR)
 {
  if (OpL >= JcTknCount || OpR >= JcTknCount)
  {
-  return JcBpAmbiguous;
+  return 0;
  }
 
- jc_tkn_bp Bp = JcBpTab[OpL][OpR];
- return Bp == JcBpRightTighter;
+ uint8_t BpL = JcBpTab[OpL].Y;
+ uint8_t BpR = JcBpTab[OpR].X;
+
+ return BpR > BpL;
 }
 
 static jc_tkn_arr *
@@ -1557,7 +1679,16 @@ static jc_tkn *
 JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
 {
  jc_tkn *Lhs = JcTknArrEatRelevant(TknView);
- if (Lhs->Kind != JcTknNum)
+
+ // is Lhs a prefix?
+ jc_tkn_kind PrefixKind = JcPrefixTab[Lhs->Kind];
+ if (PrefixKind)
+ {
+  Lhs->Kind = PrefixKind;
+  jc_tkn *Rhs = JcExprRecursive(TknView, Lhs->Kind);
+  Lhs->First = Rhs;
+ }
+ else if (Lhs->Kind != JcTknNum)
  {
   puts("Error wrong start tkn");
   return 0;
@@ -1571,7 +1702,7 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
    break;
   }
 
-  if (JcOpRightBindsTighter(OpL, Op->Kind))
+  if (JcOpInfixRightBindsTighter(OpL, Op->Kind))
   {
    JcTknArrEatRelevant(TknView);
    jc_tkn *Rhs = JcExprRecursive(TknView, Op->Kind);
@@ -1595,6 +1726,7 @@ wmain(int Argc, wchar_t **Argv)
  OS_Init(&OS_W32State);
  JcBpTabInit();
  JcTknTabInit();
+ JcPrefixTabInit();
 
  uint32_t FileLn = 0;
  char *File = DebugReadFile(L".\\sample.c", &FileLn);
