@@ -35,7 +35,7 @@ Test()
  TestExprRecursive(&FailCnt, CStr("5 + 1 * 3"), CStr("(+ 5 (* 1 3))"));
  TestExprRecursive(&FailCnt, CStr("5 * 1 + 3"), CStr("(+ (* 5 1) 3)"));
  TestExprRecursive(&FailCnt, CStr("5 * 6 + 1 * 3"), CStr("(+ (* 5 6) (* 1 3))"));
- TestExprRecursive(&FailCnt, CStr("5 + +3"), CStr("(+ 5 (+ 3))"));
+ TestExprRecursive(&FailCnt, CStr("++5-- + +3"), CStr("(+ (++ (-- 5)) (+ 3))"));
 
  printf("%zd failed\n", FailCnt);
 }

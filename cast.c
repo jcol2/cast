@@ -1705,11 +1705,22 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
   if (JcOpInfixRightBindsTighter(OpL, Op->Kind))
   {
    JcTknArrEatRelevant(TknView);
-   jc_tkn *Rhs = JcExprRecursive(TknView, Op->Kind);
-   // todo proper inserts
-   Op->First = Lhs;
-   Lhs->Next = Rhs;
-   Lhs = Op;
+
+   // postfix unary or binary?
+   if (Op->Kind == JcTknPostfixIncrement || Op->Kind == JcTknPostfixDecrement)
+   {
+    // todo proper inserts
+    Op->First = Lhs;
+    Lhs = Op;
+   }
+   else
+   {
+    jc_tkn *Rhs = JcExprRecursive(TknView, Op->Kind);
+    // todo proper inserts
+    Op->First = Lhs;
+    Lhs->Next = Rhs;
+    Lhs = Op;
+   }
   }
   else
   {
