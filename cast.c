@@ -426,6 +426,7 @@ digi_more:
 #define Max(N1, N2) (((N1) > (N2)) ? (N1) : (N2))
 #define Clamp(A,X,B) (((X)<(A))?(A):((X)>(B))?(B):(X))
 #define AlignPow2(N, Align) (((N) + (Align) - 1) & (~((Align) - 1)))
+#define ArrLen(Arr) (sizeof(Arr) / sizeof((Arr)[0]))
 
 #ifdef DEBUG_BUILD
 #define Assert(Cond) (!(Cond) && *(unsigned char *)(0))
@@ -699,7 +700,7 @@ ArPushEx(ar *Ar, size_t Len, size_t Aln, uint32_t Zero)
 #define ArPush(Ar, T, Len) ArPushEx((Ar), sizeof(T) * (Len), Max(8, AlignOf(T)), 1)
 #define ArPushNoZero(Ar, T, Len) ArPushEx((Ar), sizeof(T) * (Len), Max(8, AlignOf(T)), 0)
 
-#define ArPushA1(Ar, Len) A1(ArPush(Ar, u1, Len), Len)
+#define ArPushA8(Ar, Len) A8(ArPush(Ar, int8_t, Len), Len)
 
 static void
 ArPopTo(ar *Ar, size_t Len)
@@ -1330,7 +1331,7 @@ A8EatPunctuatorMut(a8 *A, jc_tkn *Out)
   if (A8EatMut(A, Prefix))
   {
    *Out = (jc_tkn){
-    .Kind = I,
+    .Kind = (jc_tkn_kind)I,
     .Mem = Start,
     .Ln = Prefix.Ln,
    };
@@ -1435,6 +1436,7 @@ JcTknArrPeek(jc_tkn_arr *TknArr)
  return Ret;
 }
 
+// skips whitespace
 static jc_tkn *
 JcTknArrPeekRelevant(jc_tkn_arr *TknArr)
 {
@@ -1463,6 +1465,7 @@ JcTknArrEat(jc_tkn_arr *TknArr)
  return Ret;
 }
 
+// skips whitespace
 static jc_tkn *
 JcTknArrEatRelevant(jc_tkn_arr *TknArr)
 {
@@ -1474,9 +1477,37 @@ JcTknArrEatRelevant(jc_tkn_arr *TknArr)
 }
 
 static void
-JcTknPrint(jc_tkn *Tkn)
+JcTknPrintMut(a8 *A, jc_tkn *Tkn)
 {
- printf("Ln: %zd, %.*s\n", Tkn->Ln, (int)Tkn->Ln, Tkn->Mem);
+ if (Tkn->First && Tkn->First->Next)
+ {
+  // binary op
+  a8 TknStr = JcTknTab[Tkn->Kind];
+  int WriteLn = sprintf_s(A->Mem, A->Ln, "(%s ", TknStr.Mem);
+  A8ShlMut(A, WriteLn);
+
+  JcTknPrintMut(A, Tkn->First);
+
+  WriteLn = sprintf_s(A->Mem, A->Ln, " ");
+  A8ShlMut(A, WriteLn);
+
+  JcTknPrintMut(A, Tkn->First->Next);
+
+  WriteLn = sprintf_s(A->Mem, A->Ln, ")");
+  A8ShlMut(A, WriteLn);
+ }
+ else
+ {
+  // atomic
+  int WriteLn = sprintf_s(A->Mem, A->Ln, "%.*s", (int)Tkn->Ln, Tkn->Mem);
+  A8ShlMut(A, WriteLn);
+ }
+}
+
+static void
+JcTknPrint(a8 A, jc_tkn *Tkn)
+{
+ JcTknPrintMut(&A, Tkn);
 }
 
 static uint32_t
@@ -1489,6 +1520,37 @@ JcOpRightBindsTighter(jc_tkn_kind OpL, jc_tkn_kind OpR)
 
  jc_tkn_bp Bp = JcBpTab[OpL][OpR];
  return Bp == JcBpRightTighter;
+}
+
+static jc_tkn_arr *
+JcLex(ar *Ar, ar *TknAr, char *Mem, size_t Ln)
+{
+ jc_tkn_arr *TknArr = ArPush(Ar, jc_tkn_arr, 1);
+ TknArr->Ar = TknAr;
+
+ a8 Slice = A8(Mem, Ln);
+ while (Slice.Ln)
+ {
+  jc_tkn Tkn = {0};
+  uint32_t Res = (
+   A8EatPunctuatorMut(&Slice, &Tkn) ||
+   A8EatHwsMut(&Slice, &Tkn) ||
+   A8EatVwsMut(&Slice, &Tkn) ||
+   A8EatIdentMut(&Slice, &Tkn) ||
+   A8EatNumMut(&Slice, &Tkn)
+  );
+  if (Res)
+  {
+   TknArrPush(TknArr, &Tkn);
+  }
+  else
+  {
+   puts("failed");
+   break;
+  }
+ }
+
+ return TknArr;
 }
 
 static jc_tkn *
@@ -1526,6 +1588,7 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
  return Lhs;
 }
 
+#ifdef STANDALONE
 int
 wmain(int Argc, wchar_t **Argv)
 {
@@ -1542,35 +1605,17 @@ wmain(int Argc, wchar_t **Argv)
 
  ar *Ar = ArAlloc();
  ar *TknAr = ArAlloc();
- jc_tkn_arr *TknArr = ArPush(Ar, jc_tkn_arr, 1);
- TknArr->Ar = TknAr;
-
- a8 Slice = A8(File, FileLn);
- while (Slice.Ln)
- {
-  jc_tkn Tkn = {0};
-  uint32_t Res = (
-   A8EatPunctuatorMut(&Slice, &Tkn) ||
-   A8EatHwsMut(&Slice, &Tkn) ||
-   A8EatVwsMut(&Slice, &Tkn) ||
-   A8EatIdentMut(&Slice, &Tkn) ||
-   A8EatNumMut(&Slice, &Tkn)
-  );
-  if (Res)
-  {
-   TknArrPush(TknArr, &Tkn);
-  }
-  else
-  {
-   puts("failed");
-   break;
-  }
- }
+ jc_tkn_arr *TknArr = JcLex(Ar, TknAr, File, FileLn);
 
  jc_tkn_arr TknView = *TknArr;
  jc_tkn *Res = JcExprRecursive(&TknView, JcTknHws);
 
  puts("done");
 
+ a8 A = ArPushA8(Ar, 100000);
+ JcTknPrint(A, Res);
+ printf("%s", A.Mem);
+
  return 0;
 }
+#endif
