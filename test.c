@@ -28,6 +28,9 @@ TestExprRecursive(size_t *FailCnt, a8 Input, a8 Expect)
  return Ret;
 }
 
+int foo(){return 0;}
+int boo(){return 0;}
+
 static void
 Test()
 {
@@ -39,8 +42,13 @@ Test()
  TestExprRecursive(&FailCnt, CStr("(((3)))"), CStr("3"));
  TestExprRecursive(&FailCnt, CStr("10[1]"), CStr("([ 10 1)"));
  TestExprRecursive(&FailCnt, CStr("1 ? 100 : 5 ? 2 : 3"), CStr("(? 1 100 (? 5 2 3))"));
+ TestExprRecursive(&FailCnt, CStr("+ - + - + 3"), CStr("(+ (- (+ (- (+ 3)))))"));
+ TestExprRecursive(&FailCnt, CStr("(long long)3 + (unsigned int)5"), CStr("(+ (long (long 3)) (int (unsigned 5)))"));
 
  printf("%zd failed\n", FailCnt);
+
+ int (*bar)() = (int (*)())boo;
+ ((int (*(*)(double (*)(int, char)))(long, ...))0);
 }
 
 int

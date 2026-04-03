@@ -1143,6 +1143,7 @@ typedef enum
  JcTknMultiLineComment,
 
  JcTknIdent,
+ JcTknTypeCast,
 
  // literals
  JcTknNum,
@@ -1204,6 +1205,7 @@ typedef enum
 
  JcTknMultiply,
  JcTknDereference,
+ JcTknPointer,
 
  JcTknDivide,
  JcTknModulo,
@@ -1272,7 +1274,7 @@ JcBpTabInit()
  JcBpTab[JcTknAddressOf] = V2U8(0, 29);
  // todo sizeof, alignof (30, 29)
 
- // todo typecast (28, 27)
+ JcBpTab[JcTknTypeCast] = V2U8(0, 27);
 
  JcBpTab[JcTknMultiply] = V2U8(25, 26);
  JcBpTab[JcTknDivide] = V2U8(25, 26);
@@ -1585,65 +1587,53 @@ JcTknArrEatRelevant(jc_tkn_arr *TknArr)
 }
 
 static void
+JcA8PrintMut(a8 *A, a8 Str)
+{
+ int WriteLn = sprintf_s(A->Mem, A->Ln, "%.*s", (int)Str.Ln, Str.Mem);
+ A8ShlMut(A, WriteLn);
+}
+
+static void
 JcTknPrintMut(a8 *A, jc_tkn *Tkn)
 {
  if (!Tkn) return;
  if (Tkn->First && Tkn->First->Next && Tkn->First->Next->Next)
  {
   // ternary
-  a8 TknStr = JcTknTab[Tkn->Kind];
-  int WriteLn = sprintf_s(A->Mem, A->Ln, "(%s ", TknStr.Mem);
-  A8ShlMut(A, WriteLn);
-
+  JcA8PrintMut(A, CStr("("));
+  JcA8PrintMut(A, A8(Tkn->Mem, Tkn->Ln));
+  JcA8PrintMut(A, CStr(" "));
   JcTknPrintMut(A, Tkn->First);
-
-  WriteLn = sprintf_s(A->Mem, A->Ln, " ");
-  A8ShlMut(A, WriteLn);
-
+  JcA8PrintMut(A, CStr(" "));
   JcTknPrintMut(A, Tkn->First->Next);
-
-  WriteLn = sprintf_s(A->Mem, A->Ln, " ");
-  A8ShlMut(A, WriteLn);
-
+  JcA8PrintMut(A, CStr(" "));
   JcTknPrintMut(A, Tkn->First->Next->Next);
-
-  WriteLn = sprintf_s(A->Mem, A->Ln, ")");
-  A8ShlMut(A, WriteLn);
+  JcA8PrintMut(A, CStr(")"));
  }
  else if (Tkn->First && Tkn->First->Next)
  {
   // binary op
-  a8 TknStr = JcTknTab[Tkn->Kind];
-  int WriteLn = sprintf_s(A->Mem, A->Ln, "(%s ", TknStr.Mem);
-  A8ShlMut(A, WriteLn);
-
+  JcA8PrintMut(A, CStr("("));
+  JcA8PrintMut(A, A8(Tkn->Mem, Tkn->Ln));
+  JcA8PrintMut(A, CStr(" "));
   JcTknPrintMut(A, Tkn->First);
-
-  WriteLn = sprintf_s(A->Mem, A->Ln, " ");
-  A8ShlMut(A, WriteLn);
-
+  JcA8PrintMut(A, CStr(" "));
   JcTknPrintMut(A, Tkn->First->Next);
-
-  WriteLn = sprintf_s(A->Mem, A->Ln, ")");
-  A8ShlMut(A, WriteLn);
+  JcA8PrintMut(A, CStr(")"));
  }
  else if (Tkn->First)
  {
   // unary op
-  a8 TknStr = JcTknTab[Tkn->Kind];
-  int WriteLn = sprintf_s(A->Mem, A->Ln, "(%s ", TknStr.Mem);
-  A8ShlMut(A, WriteLn);
-
+  JcA8PrintMut(A, CStr("("));
+  JcA8PrintMut(A, A8(Tkn->Mem, Tkn->Ln));
+  JcA8PrintMut(A, CStr(" "));
   JcTknPrintMut(A, Tkn->First);
-
-  WriteLn = sprintf_s(A->Mem, A->Ln, ")");
-  A8ShlMut(A, WriteLn);
+  JcA8PrintMut(A, CStr(")"));
  }
  else
  {
   // atomic
-  int WriteLn = sprintf_s(A->Mem, A->Ln, "%.*s", (int)Tkn->Ln, Tkn->Mem);
-  A8ShlMut(A, WriteLn);
+  JcA8PrintMut(A, A8(Tkn->Mem, Tkn->Ln));
  }
 }
 
@@ -1702,6 +1692,49 @@ JcLex(ar *Ar, ar *TknAr, char *Mem, size_t Ln)
  return TknArr;
 }
 
+static uint32_t
+StrIsType(char *Mem, size_t Ln)
+{
+ uint32_t Ret = 0;
+ a8 Types[] =
+ {
+  CStr("unsigned"),
+  CStr("char"),
+  CStr("short"),
+  CStr("int"),
+  CStr("long"),
+  CStr("float"),
+  CStr("double"),
+  CStr("struct"),
+  CStr("enum"),
+ };
+
+ for (size_t I = 0; I < ArrLen(Types); ++I)
+ {
+  if (StrEq(Mem, Ln, Types[I].Mem, Types[I].Ln))
+  {
+   Ret = 1;
+   break;
+  }
+ }
+ return Ret;
+}
+
+static jc_tkn *
+JcParseTypeCast(jc_tkn_arr *TknView)
+{
+ jc_tkn *Prev = 0;
+ jc_tkn *Cur = 0;
+ while ((Cur = JcTknArrPeekRelevant(TknView)) && Cur->Kind == JcTknIdent && StrIsType(Cur->Mem, Cur->Ln))
+ {
+  JcTknArrEatRelevant(TknView);
+  Cur->Kind = JcTknTypeCast;
+  Cur->First = Prev;
+  Prev = Cur;
+ }
+ return Prev;
+}
+
 static jc_tkn *
 JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
 {
@@ -1713,19 +1746,42 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
  {
   Lhs->Kind = PrefixKind;
   jc_tkn *Rhs = JcExprRecursive(TknView, Lhs->Kind);
+  //todo proper insert
   Lhs->First = Rhs;
  }
  else if (Lhs->Kind == JcTknLParen)
  {
-  Lhs = JcExprRecursive(TknView, JcTknEof);
-  jc_tkn *RParen = JcTknArrEatRelevant(TknView);
-  if (RParen->Kind != JcTknRParen)
+  jc_tkn *Peek = JcTknArrPeekRelevant(TknView);
+  if (StrIsType(Peek->Mem, Peek->Ln))
   {
-   puts("Error no closing paren found");
-   return 0;
+   Lhs = JcParseTypeCast(TknView);
+   jc_tkn *RParen = JcTknArrEatRelevant(TknView);
+   if (RParen->Kind != JcTknRParen)
+   {
+    puts("Error no closing paren found");
+    return 0;
+   }
+   jc_tkn *Rhs = JcExprRecursive(TknView, Lhs->Kind);
+   //todo proper insert
+   jc_tkn *Bottom = Lhs;
+   while (Bottom->First) Bottom = Bottom->First;
+   Bottom->First = Rhs;
+  }
+  else
+  {
+   Lhs = JcExprRecursive(TknView, JcTknEof);
+   jc_tkn *RParen = JcTknArrEatRelevant(TknView);
+   if (RParen->Kind != JcTknRParen)
+   {
+    puts("Error no closing paren found");
+    return 0;
+   }
   }
  }
- else if (Lhs->Kind != JcTknNum && Lhs->Kind != JcTknIdent)
+ else if (Lhs->Kind == JcTknIdent)
+ {
+ }
+ else if (Lhs->Kind != JcTknNum)
  {
   puts("Error wrong start tkn");
   return 0;
