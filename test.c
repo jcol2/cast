@@ -32,7 +32,7 @@ static void
 Test()
 {
  size_t FailCnt = 0;
- TestExprRecursive(&FailCnt, CStr("5 + 1 * 3"), CStr("(+ 5 (* 1 3))"));
+ TestExprRecursive(&FailCnt, CStr("foo + 1 * 3"), CStr("(+ foo (* 1 3))"));
  TestExprRecursive(&FailCnt, CStr("5 * 1 + 3"), CStr("(+ (* 5 1) 3)"));
  TestExprRecursive(&FailCnt, CStr("5 * 6 + 1 * 3"), CStr("(+ (* 5 6) (* 1 3))"));
  TestExprRecursive(&FailCnt, CStr("++5-- + +3"), CStr("(+ (++ (-- 5)) (+ 3))"));

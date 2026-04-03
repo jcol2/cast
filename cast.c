@@ -1587,6 +1587,7 @@ JcTknArrEatRelevant(jc_tkn_arr *TknArr)
 static void
 JcTknPrintMut(a8 *A, jc_tkn *Tkn)
 {
+ if (!Tkn) return;
  if (Tkn->First && Tkn->First->Next && Tkn->First->Next->Next)
  {
   // ternary
@@ -1724,7 +1725,7 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
    return 0;
   }
  }
- else if (Lhs->Kind != JcTknNum)
+ else if (Lhs->Kind != JcTknNum && Lhs->Kind != JcTknIdent)
  {
   puts("Error wrong start tkn");
   return 0;
