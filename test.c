@@ -44,11 +44,15 @@ Test()
  TestExprRecursive(&FailCnt, CStr("1 ? 100 : 5 ? 2 : 3"), CStr("(? 1 100 (? 5 2 3))"));
  TestExprRecursive(&FailCnt, CStr("+ - + - + 3"), CStr("(+ (- (+ (- (+ 3)))))"));
  TestExprRecursive(&FailCnt, CStr("(long long)3 + (unsigned int)5"), CStr("(+ (long (long 3)) (int (unsigned 5)))"));
+ TestExprRecursive(&FailCnt, CStr("(long *)3 + (unsigned *)5"), CStr("(+ (* (long 3)) (* (unsigned 5)))"));
 
  printf("%zd failed\n", FailCnt);
 
  int (*bar)() = (int (*)())boo;
- ((int (*(*)(double (*)(int, char)))(long, ...))0);
+ (int (*(*)(double (*)(int, char)))(long, ...))0;
+ (int (*(*(*)(double, char *))[5])(long, ...))0;
+ (int (* const volatile) [5])0;
+ (int (*****)())0;
 }
 
 int

@@ -1725,13 +1725,19 @@ JcParseTypeCast(jc_tkn_arr *TknView)
 {
  jc_tkn *Prev = 0;
  jc_tkn *Cur = 0;
- while ((Cur = JcTknArrPeekRelevant(TknView)) && Cur->Kind == JcTknIdent && StrIsType(Cur->Mem, Cur->Ln))
+ while ((Cur = JcTknArrPeekRelevant(TknView)) && ((Cur->Kind == JcTknIdent && StrIsType(Cur->Mem, Cur->Ln)) || (Prev != 0 && Cur->Kind == JcTknMultiply)))
  {
+  if (Cur->Kind == JcTknMultiply)
+  {
+   Cur->Kind = JcTknPointer;
+  }
   JcTknArrEatRelevant(TknView);
   Cur->Kind = JcTknTypeCast;
   Cur->First = Prev;
   Prev = Cur;
  }
+
+
  return Prev;
 }
 
