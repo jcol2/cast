@@ -1760,6 +1760,7 @@ JcEatTypeCast(jc_tkn_arr *TknView)
 {
  jc_tkn *TypeChain = JcEatTypeChain(TknView);
 
+ // todo also support arr syntax
  jc_tkn *LParen = JcTknArrPeekRelevant(TknView);
  if (LParen->Kind == JcTknLParen)
  {
@@ -1771,6 +1772,11 @@ JcEatTypeCast(jc_tkn_arr *TknView)
    jc_tkn *RParen = JcTknArrEatRelevant(TknView);
    if (RParen->Kind == JcTknRParen)
    {
+    // todo also support multiple ptrs (***)
+    // todo also support (* const volatile)
+    // todo also support func param list
+    // todo also support arr syntax
+    // todo also support nested function ptr syntax
     return Ptr;
    }
    puts("Error expected closing paren");
