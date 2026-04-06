@@ -1721,7 +1721,7 @@ StrIsType(char *Mem, size_t Ln)
 }
 
 static jc_tkn *
-JcParseTypeCast(jc_tkn_arr *TknView)
+JcEatTypeChain(jc_tkn_arr *TknView)
 {
  jc_tkn *Prev = 0;
  jc_tkn *Cur = 0;
@@ -1736,9 +1736,50 @@ JcParseTypeCast(jc_tkn_arr *TknView)
   Cur->First = Prev;
   Prev = Cur;
  }
-
-
  return Prev;
+}
+
+static jc_tkn *
+JcEatTypeCastPtr(jc_tkn_arr *TknView)
+{
+ // must be pointer
+ jc_tkn *Ptr = JcTknArrEatRelevant(TknView);
+ if (Ptr->Kind == JcTknMultiply)
+ {
+  Ptr->Kind = JcTknPointer;
+  return Ptr;
+ }
+ else
+ {
+  return 0;
+ }
+}
+
+static jc_tkn *
+JcEatTypeCast(jc_tkn_arr *TknView)
+{
+ jc_tkn *TypeChain = JcEatTypeChain(TknView);
+
+ jc_tkn *LParen = JcTknArrPeekRelevant(TknView);
+ if (LParen->Kind == JcTknLParen)
+ {
+  JcTknArrEatRelevant(TknView);
+  jc_tkn *Ptr = JcEatTypeCastPtr(TknView);
+  if (Ptr)
+  {
+   Ptr->First = TypeChain;
+   jc_tkn *RParen = JcTknArrEatRelevant(TknView);
+   if (RParen->Kind == JcTknRParen)
+   {
+    return Ptr;
+   }
+   puts("Error expected closing paren");
+   return 0;
+  }
+  puts("Error expected pointer");
+  return 0;
+ }
+ return TypeChain;
 }
 
 static jc_tkn *
@@ -1760,7 +1801,7 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
   jc_tkn *Peek = JcTknArrPeekRelevant(TknView);
   if (StrIsType(Peek->Mem, Peek->Ln))
   {
-   Lhs = JcParseTypeCast(TknView);
+   Lhs = JcEatTypeCast(TknView);
    jc_tkn *RParen = JcTknArrEatRelevant(TknView);
    if (RParen->Kind != JcTknRParen)
    {
