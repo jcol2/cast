@@ -56,6 +56,36 @@ Test()
  (int (*****)())0;
  (int (*(*))())0;
  (int (* const))0;
+//  1. Pointer to function returning pointer to array of function pointers
+// (int (*(*f1)(double, char *))[5])(long, ...)
+// 2. Cast involving const/volatile qualifiers and nested function pointers
+// (void (*(* const volatile)(int (*)(char, short)))(float, double))(int (*)(char, short))
+// 3. Function pointer returning another function pointer with array parameter
+// char *(*(*f3)(int, char (*)[10]))(double (*)(long), ...)
+// 4. Deeply nested pointer-to-function returning pointer-to-function
+// int (*(*(*f4)(void))(int (*)(int)))(char, double)
+// 5. Function pointer with multiple levels of arrays and pointers
+// double (*(*f5[3])(int (*)(int, int)))[7]
+// 6. Cast of a function pointer taking another function pointer returning array
+// (int (*)(char *(*)(int, int (*)(double)) )) f6
+// 7. Variadic function pointer returning pointer to const function pointer
+// const int (*(*f7)(int, ...))(char, long)
+// 8. Pointer to function returning pointer to function returning pointer
+// void *(*(*(*f8)(int))(double))(char *)
+// 9. Function pointer taking array of function pointers
+// int (*f9)(int (*[4])(double, double))
+// 10. Cast with typedef-like complexity inline
+// (long (*(*)(short, int (*)(int)))(char, long (*)(double)))(short, int (*)(int))
+// 11. Pointer to function returning pointer to array of pointers to functions
+// int (*(*f11)(void))[3][4]
+// 12. Function pointer with restrict-qualified pointer arguments (C99+)
+// void (*f12)(int *restrict, double *restrict, void (*)(int))
+// 13. Function returning pointer to function returning array pointer
+// int (*(*f13(void))(double))[5]
+// 14. Insane cast expression (good for parser edge cases)
+// ((int (*(*)(double (*)(int, char)))(long, ...))0)
+// 15. Mixed qualifiers, arrays, and function pointers
+// volatile int (*(*const f15[2])(char (*)(int)))(double, float)
 }
 
 int
