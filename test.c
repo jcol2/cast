@@ -43,11 +43,13 @@ Test()
  TestExprRecursive(&FailCnt, CStr("10[1]"), CStr("([ 10 1)"));
  TestExprRecursive(&FailCnt, CStr("1 ? 100 : 5 ? 2 : 3"), CStr("(? 1 100 (? 5 2 3))"));
  TestExprRecursive(&FailCnt, CStr("+ - + - + 3"), CStr("(+ (- (+ (- (+ 3)))))"));
+
+ // typecast tests
  TestExprRecursive(&FailCnt, CStr("(long long)3 + (unsigned int)5"), CStr("(+ (long (long 3)) (int (unsigned 5)))"));
  TestExprRecursive(&FailCnt, CStr("(long *)3 + (unsigned *)5"), CStr("(+ (* (long 3)) (* (unsigned 5)))"));
  TestExprRecursive(&FailCnt, CStr("(long (*))3"), CStr("(* (long 3))"));
-
- printf("%zd failed\n", FailCnt);
+ TestExprRecursive(&FailCnt, CStr("(long *(**))3"), CStr("(* (* (* (long 3))))"));
+ TestExprRecursive(&FailCnt, CStr("(long (* restrict const const * const volatile))3"), CStr("(volatile (const (* (const (const (restrict (* (long 3))))))))"));
 
  int (*bar)() = (int (*)())boo;
  (int (*(*)(double (*)(int, char)))(long, ...))0;
@@ -56,6 +58,21 @@ Test()
  (int (*****)())0;
  (int (*(*))())0;
  (int (* const))0;
+
+ (int (*))0;
+
+ (int (*)())0;
+ (int (*)(int))0;
+
+ (int (*(*)())())0;
+
+ (int (*)[2])0;
+ (int ((*)[2]))0;
+ (int ((*(*)[2])()))0;
+
+ (char (*)[1])0;
+
+ printf("%zd failed\n", FailCnt);
 //  1. Pointer to function returning pointer to array of function pointers
 // (int (*(*f1)(double, char *))[5])(long, ...)
 // 2. Cast involving const/volatile qualifiers and nested function pointers

@@ -1541,7 +1541,7 @@ JcTknArrPeek(jc_tkn_arr *TknArr)
  jc_tkn *Ret = &JcTknGlobalEof;
  if (TknArr->Ln)
  {
-  jc_tkn *Ret = TknArr->Mem;
+  Ret = TknArr->Mem;
  }
  return Ret;
 }
@@ -1579,7 +1579,7 @@ JcTknArrEat(jc_tkn_arr *TknArr)
 static jc_tkn *
 JcTknArrEatRelevant(jc_tkn_arr *TknArr)
 {
- jc_tkn *Ret = 0;
+ jc_tkn *Ret;
  while ((Ret = JcTknArrEat(TknArr)) && !JcTknKindIsExprRelevant(Ret->Kind))
  {
  }
@@ -1720,6 +1720,28 @@ StrIsType(char *Mem, size_t Ln)
  return Ret;
 }
 
+static uint32_t
+StrIsPtrQualifier(char *Mem, size_t Ln)
+{
+ uint32_t Ret = 0;
+ a8 Types[] =
+ {
+  CStr("const"),
+  CStr("volatile"),
+  CStr("restrict"),
+ };
+
+ for (size_t I = 0; I < ArrLen(Types); ++I)
+ {
+  if (StrEq(Mem, Ln, Types[I].Mem, Types[I].Ln))
+  {
+   Ret = 1;
+   break;
+  }
+ }
+ return Ret;
+}
+
 static jc_tkn *
 JcEatTypeChain(jc_tkn_arr *TknView)
 {
@@ -1732,58 +1754,87 @@ JcEatTypeChain(jc_tkn_arr *TknView)
    Cur->Kind = JcTknPointer;
   }
   JcTknArrEatRelevant(TknView);
-  Cur->Kind = JcTknTypeCast;
   Cur->First = Prev;
   Prev = Cur;
  }
  return Prev;
 }
 
+// eat all const / volatile / restrict
 static jc_tkn *
-JcEatTypeCastPtr(jc_tkn_arr *TknView)
+JcEatPtrChain(jc_tkn_arr *TknView)
 {
- // must be pointer
- jc_tkn *Ptr = JcTknArrEatRelevant(TknView);
- if (Ptr->Kind == JcTknMultiply)
+ jc_tkn *Prev = 0;
+ jc_tkn *Cur = 0;
+ while ((Cur = JcTknArrPeekRelevant(TknView))
+  && (((Prev && Cur->Kind == JcTknIdent && StrIsPtrQualifier(Cur->Mem, Cur->Ln))
+  || Cur->Kind == JcTknMultiply)))
  {
-  Ptr->Kind = JcTknPointer;
-  return Ptr;
+  if (Cur->Kind == JcTknMultiply)
+  {
+   Cur->Kind = JcTknPointer;
+  }
+  JcTknArrEatRelevant(TknView);
+  Cur->First = Prev;
+  Prev = Cur;
  }
- else
- {
-  return 0;
- }
+ return Prev;
 }
 
-static jc_tkn *
-JcEatTypeCast(jc_tkn_arr *TknView)
-{
- jc_tkn *TypeChain = JcEatTypeChain(TknView);
 
- // todo also support arr syntax
+static jc_tkn *
+JcEatNestedPtr(jc_tkn_arr *TknView)
+{
  jc_tkn *LParen = JcTknArrPeekRelevant(TknView);
  if (LParen->Kind == JcTknLParen)
  {
   JcTknArrEatRelevant(TknView);
-  jc_tkn *Ptr = JcEatTypeCastPtr(TknView);
-  if (Ptr)
+  jc_tkn *PtrChain = JcEatPtrChain(TknView);
+  if (PtrChain)
   {
-   Ptr->First = TypeChain;
-   jc_tkn *RParen = JcTknArrEatRelevant(TknView);
-   if (RParen->Kind == JcTknRParen)
+   jc_tkn *Peek = JcTknArrPeekRelevant(TknView);
+   switch (Peek->Kind)
    {
-    // todo also support multiple ptrs (***)
-    // todo also support (* const volatile)
+    case JcTknRParen:
+    {
+     JcTknArrEatRelevant(TknView);
+     return PtrChain;
+    } break;
+    case JcTknLParen:
+    {
+     return JcEatNestedPtr(TknView);
+    } break;
+    default: 
+    {
+     puts("Error expected closing paren");
+    } break;
     // todo also support func param list
     // todo also support arr syntax
     // todo also support nested function ptr syntax
-    return Ptr;
    }
-   puts("Error expected closing paren");
-   return 0;
   }
-  puts("Error expected pointer");
-  return 0;
+  else
+  {
+   puts("Error expected pointer");
+  }
+ }
+ return 0;
+}
+
+// (typechain (optnestedptr) optparamlist optbracklist)
+static jc_tkn *
+JcEatTypeCast(jc_tkn_arr *TknView)
+{
+ jc_tkn *TypeChain = JcEatTypeChain(TknView);
+ jc_tkn *NestedPtr = JcEatNestedPtr(TknView);
+ if (NestedPtr)
+ {
+  // get outermost ptr to append typechain to
+  jc_tkn *LastPtr = NestedPtr;
+  for (; LastPtr->First; LastPtr = LastPtr->First) {}
+  LastPtr->First = TypeChain;// todo Revisit this and this iteration insert after param list code written
+
+  return NestedPtr;
  }
  return TypeChain;
 }
