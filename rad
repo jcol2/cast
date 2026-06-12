@@ -1,0 +1,13 @@
+// raddbg 0.9.27 project file
+
+target:
+{
+  executable: "dst/test.exe"
+  working_directory: dst
+  enabled: 1
+}
+type_view:
+{
+  expr: "rows($, Kind, Mem, Ln, First, Next, list($.First, First), list($.First, Next))"
+  type: jc_tknasdf
+}

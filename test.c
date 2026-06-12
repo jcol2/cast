@@ -35,6 +35,7 @@ static void
 Test()
 {
  size_t FailCnt = 0;
+ // basic expression tests
  TestExprRecursive(&FailCnt, CStr("foo + 1 * 3"), CStr("(+ foo (* 1 3))"));
  TestExprRecursive(&FailCnt, CStr("5 * 1 + 3"), CStr("(+ (* 5 1) 3)"));
  TestExprRecursive(&FailCnt, CStr("5 * 6 + 1 * 3"), CStr("(+ (* 5 6) (* 1 3))"));
@@ -45,11 +46,13 @@ Test()
  TestExprRecursive(&FailCnt, CStr("+ - + - + 3"), CStr("(+ (- (+ (- (+ 3)))))"));
 
  // typecast tests
- TestExprRecursive(&FailCnt, CStr("(long long)3 + (unsigned int)5"), CStr("(+ (long (long 3)) (int (unsigned 5)))"));
- TestExprRecursive(&FailCnt, CStr("(long *)3 + (unsigned *)5"), CStr("(+ (* (long 3)) (* (unsigned 5)))"));
- TestExprRecursive(&FailCnt, CStr("(long (*))3"), CStr("(* (long 3))"));
- TestExprRecursive(&FailCnt, CStr("(long *(**))3"), CStr("(* (* (* (long 3))))"));
- TestExprRecursive(&FailCnt, CStr("(long (* restrict const const * const volatile))3"), CStr("(volatile (const (* (const (const (restrict (* (long 3))))))))"));
+ TestExprRecursive(&FailCnt, CStr("(long long)3 + (unsigned int)5"), CStr("(+ (cast 3 (long long)) (cast 5 (int unsigned)))"));
+ TestExprRecursive(&FailCnt, CStr("(long *)3 + (unsigned *)5"), CStr("(+ (cast 3 (* long)) (cast 5 (* unsigned)))"));
+ TestExprRecursive(&FailCnt, CStr("(long (*))3"), CStr("(cast 3 (* long))"));
+ TestExprRecursive(&FailCnt, CStr("(long *(**))3"), CStr("(cast 3 (* (* (* long))))"));
+ TestExprRecursive(&FailCnt, CStr("(long (* restrict const const * const volatile))3"), CStr("(cast 3 (volatile (const (* (const (const (restrict (* long))))))))"));
+ TestExprRecursive(&FailCnt, CStr("(int (*)[2 + 2])3"), CStr("(cast 3 (* int ([ (+ 2 2))))"));
+ TestExprRecursive(&FailCnt, CStr("(int (*(*(*)(double, char *))[5])(long, ...))3"), CStr("(* (long 3))"));
 
  int (*bar)() = (int (*)())boo;
  (int (*(*)(double (*)(int, char)))(long, ...))0;
@@ -66,7 +69,7 @@ Test()
 
  (int (*(*)())())0;
 
- (int (*)[2])0;
+ (int (*)[2 + 2])0;
  (int ((*)[2]))0;
  (int ((*(*)[2])()))0;
 
@@ -108,7 +111,7 @@ Test()
 int
 wmain(int Argc, wchar_t **Argv)
 {
- OS_Init(&OS_W32State);
+ OsInit(&OS_W32State);
  JcBpTabInit();
  JcTknTabInit();
  JcPrefixTabInit();
