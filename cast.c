@@ -759,11 +759,9 @@ JcEatNestedPtr(jc_tkn_arr *TknView)
  return 0;
 }
 
-// (typechain (optnestedptr) optparamlist optbracklist)
 static jc_tkn *
-JcEatTypeCast(jc_tkn_arr *TknView, jc_tkn *LParen)
+JcEatTypeName(jc_tkn_arr *TknView)
 {
- LParen->Kind = JcTknTypeCast;
  jc_tkn *TypeChain = JcEatTypeChain(TknView);
  jc_tkn *NestedPtr = JcEatNestedPtr(TknView);
  if (NestedPtr)
@@ -772,17 +770,13 @@ JcEatTypeCast(jc_tkn_arr *TknView, jc_tkn *LParen)
   jc_tkn *LastPtr = NestedPtr;
   while (LastPtr->First && LastPtr->First->Kind != JcTknLParen && LastPtr->First->Kind != JcTknLBrack) LastPtr = LastPtr->First;
   SLLStackPush(LastPtr->First, TypeChain);
-  LParen->First = NestedPtr;
+  return NestedPtr;
  }
- else
- {
-  LParen->First = TypeChain;
- }
- return LParen;
+ return TypeChain;
 }
 
 static jc_tkn *
-JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
+JcEatPrefix(jc_tkn_arr *TknView)
 {
  jc_tkn *Lhs = JcTknArrEatRelevant(TknView);
 
@@ -801,7 +795,8 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
   jc_tkn *Peek = JcTknArrPeekRelevant(TknView);
   if (StrIsType(Peek->Mem, Peek->Ln))
   {
-   Lhs = JcEatTypeCast(TknView, Lhs);
+   Lhs->Kind = JcTknTypeCast;
+   Lhs->First = JcEatTypeName(TknView);
    jc_tkn *RParen = JcTknArrEatRelevant(TknView); //todo this may need to be a peek then eat
    if (RParen->Kind != JcTknRParen)
    {
@@ -830,6 +825,14 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
   puts("Error wrong start tkn");
   return 0;
  }
+
+ return Lhs;
+}
+
+static jc_tkn *
+JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
+{
+ jc_tkn *Lhs = JcEatPrefix(TknView);
 
  for (;;)
  {

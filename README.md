@@ -10,6 +10,7 @@ Other Resources:
   - thin waist idea here
 - [C Type to English Converter](https://cdecl.org/)
 - [SirWhinesALot Easy Parsing](https://btmc.substack.com/p/how-to-parse-expressions-easy)
+- [Rustanalyzer Parsing](https://rust-analyzer.github.io/book/contributing/syntax.html)
 
 AST Requirements:
 
