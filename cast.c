@@ -492,6 +492,14 @@ JcTknPrintMut(a8 *A, jc_tkn *Tkn)
  a8 TknStr;
  switch(Tkn->Kind)
  {
+  case JcTknLParen:
+  {
+   TknStr = CStr("lparen");
+  } break;
+  case JcTknLBrack:
+  {
+   TknStr = CStr("lbrack");
+  } break;
   case JcTknEof:
   {
    TknStr = CStr("eof");
@@ -653,6 +661,16 @@ StrIsPtrQualifier(char *Mem, size_t Ln)
 
 static jc_tkn *
 JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL);
+static jc_tkn *
+JcEatTypeName(jc_tkn_arr *TknView);
+
+static void
+JcInsertNestedPtr(jc_tkn* NestedPtr, jc_tkn *TypeChain)
+{
+ jc_tkn *LastPtr = NestedPtr;
+ while (LastPtr->First && LastPtr->First->Kind != JcTknLParen && LastPtr->First->Kind != JcTknLBrack) LastPtr = LastPtr->First;
+ SLLStackPush(LastPtr->First, TypeChain);
+}
 
 static jc_tkn *
 JcEatTypeChain(jc_tkn_arr *TknView)
@@ -705,54 +723,99 @@ JcEatNestedPtr(jc_tkn_arr *TknView)
   {
    jc_tkn *PtrChainBottom = PtrChain;
    while (PtrChainBottom->First) PtrChainBottom = PtrChainBottom->First;
-   jc_tkn *Peek = JcTknArrPeekRelevant(TknView);
-   switch (Peek->Kind)
-   {
-    case JcTknRParen:
-    {
-     JcTknArrEatRelevant(TknView);
 
-     // check for param list and brack list
-     jc_tkn *SuffixPeek = JcTknArrPeekRelevant(TknView);
-     switch (SuffixPeek->Kind)
+   // another nested ptr
+   if (JcTknArrPeekRelevant(TknView)->Kind == JcTknLParen)
+   {
+    Ret = JcEatNestedPtr(TknView);
+    JcInsertNestedPtr(Ret, PtrChain);
+   }
+   else
+   {
+    Ret = PtrChain;
+   }
+
+   // ptr chain finished
+   if (JcTknArrEatIfKind(TknView, JcTknRParen)->Kind == JcTknRParen)
+   {
+    // check for param list and brack list
+    jc_tkn *SuffixPeek = JcTknArrPeekRelevant(TknView);
+    switch (SuffixPeek->Kind)
+    {
+     // eat array brackets
+     case JcTknLBrack:
      {
-      case JcTknLBrack:
+      JcTknArrEatRelevant(TknView);
+      jc_tkn *Expr = JcExprRecursive(TknView, JcTknEof);
+      if (Expr->Kind != JcTknEof) //todo error detection?
       {
-       JcTknArrEatRelevant(TknView);
-       jc_tkn *Expr = JcExprRecursive(TknView, JcTknEof);
-       if (Expr->Kind != JcTknEof) //todo error detection?
+       PtrChainBottom->First = SuffixPeek;
+       SuffixPeek->First = Expr;
+       if (JcTknArrEatIfKind(TknView, JcTknRBrack)->Kind != JcTknRBrack)
        {
-        PtrChainBottom->First = SuffixPeek;
-        SuffixPeek->First = Expr;
-        if (JcTknArrEatIfKind(TknView, JcTknRBrack)->Kind != JcTknRBrack)
+        puts("Error expected closing bracket");
+       }
+      }
+      else
+      {
+       puts("Error expected expression");
+      }
+     } break;
+     // eat params
+     case JcTknLParen:
+     {
+      JcTknArrEatRelevant(TknView);
+      PtrChainBottom->First = SuffixPeek;
+      jc_tkn *LastType = &JcTknGlobalEof;
+      while (true)
+      {
+       // eat paramlist commas
+       if (LastType->Kind != JcTknEof)
+       {
+        if (JcTknArrEatIfKind(TknView, JcTknComma)->Kind != JcTknComma)
         {
-         puts("Error expected closing bracket");
+         break;
         }
+       }
+       // eat type
+       jc_tkn *CurType = JcEatTypeName(TknView);
+       if (CurType->Kind == JcTknEof)
+       {
+        CurType = JcTknArrEatIfKind(TknView, JcTknEllipsis);
+        if (CurType->Kind == JcTknEllipsis)
+        {
+         LastType->Next = CurType;
+        }
+        break;
        }
        else
        {
-        puts("Error expected expression");
+        // first iteration?
+        if (LastType->Kind == JcTknEof)
+        {
+         SuffixPeek->First = CurType;
+        }
+        else
+        {
+         LastType->Next = CurType;
+        }
        }
-      } break;
-      case JcTknLParen:
+       LastType = CurType;
+      }
+      if (JcTknArrEatIfKind(TknView, JcTknRParen)->Kind != JcTknRParen)
       {
-       puts("error unimplemented");
-      } break;
-      default:
-      {
-       // do nothing
-      } break;
-     }
-     Ret = PtrChain;
-    } break;
-    case JcTknLParen:
-    {
-     Ret = JcEatNestedPtr(TknView);
-    } break;
-    default: 
-    {
-     puts("Error expected closing paren");
-    } break;
+       puts("Error expected closing paren");
+      }
+     } break;
+     default:
+     {
+      // do nothing
+     } break;
+    }
+   }
+   else
+   {
+    puts("Error expected closing paren");
    }
   }
   else
@@ -771,9 +834,7 @@ JcEatTypeName(jc_tkn_arr *TknView)
  if (TypeChain->Kind != JcTknEof && NestedPtr->Kind != JcTknEof)
  {
   // get outermost ptr to append typechain to
-  jc_tkn *LastPtr = NestedPtr;
-  while (LastPtr->First && LastPtr->First->Kind != JcTknLParen && LastPtr->First->Kind != JcTknLBrack) LastPtr = LastPtr->First;
-  SLLStackPush(LastPtr->First, TypeChain);
+  JcInsertNestedPtr(NestedPtr, TypeChain);
   return NestedPtr;
  }
  return TypeChain;

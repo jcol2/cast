@@ -41,7 +41,7 @@ Test()
  TestExprRecursive(&FailCnt, CStr("5 * 6 + 1 * 3"), CStr("(+ (* 5 6) (* 1 3))"));
  TestExprRecursive(&FailCnt, CStr("++5-- + +3"), CStr("(+ (++ (-- 5)) (+ 3))"));
  TestExprRecursive(&FailCnt, CStr("(((3)))"), CStr("3"));
- TestExprRecursive(&FailCnt, CStr("10[1]"), CStr("([ 10 1)"));
+ TestExprRecursive(&FailCnt, CStr("10[1]"), CStr("(lbrack 10 1)"));
  TestExprRecursive(&FailCnt, CStr("1 ? 100 : 5 ? 2 : 3"), CStr("(? 1 100 (? 5 2 3))"));
  TestExprRecursive(&FailCnt, CStr("+ - + - + 3"), CStr("(+ (- (+ (- (+ 3)))))"));
 
@@ -51,8 +51,8 @@ Test()
  TestExprRecursive(&FailCnt, CStr("(long (*))3"), CStr("(cast 3 (* long))"));
  TestExprRecursive(&FailCnt, CStr("(long *(**))3"), CStr("(cast 3 (* (* (* long))))"));
  TestExprRecursive(&FailCnt, CStr("(long (* restrict const const * const volatile))3"), CStr("(cast 3 (volatile (const (* (const (const (restrict (* long))))))))"));
- TestExprRecursive(&FailCnt, CStr("(int (*)[2 + 2])3"), CStr("(cast 3 (* int ([ (+ 2 2))))"));
- TestExprRecursive(&FailCnt, CStr("(int (*(*(*)(double, char *))[5])(long, ...))3"), CStr("(* (long 3))"));
+ TestExprRecursive(&FailCnt, CStr("(int (*)[2 + 2])3"), CStr("(cast 3 (* int (lbrack (+ 2 2))))"));
+ TestExprRecursive(&FailCnt, CStr("(int (*(*(*)(double, char *))[5])(long, ...))3"), CStr("(cast 3 (* (* (* int (lparen long ...)) (lbrack 5)) (lparen double (* char))))"));
 
  int (*bar)() = (int (*)())boo;
  (int (*(*)(double (*)(int, char)))(long, ...))0;
