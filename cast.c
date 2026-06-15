@@ -492,6 +492,10 @@ JcTknPrintMut(a8 *A, jc_tkn *Tkn)
  a8 TknStr;
  switch(Tkn->Kind)
  {
+  case JcTknEof:
+  {
+   TknStr = CStr("eof");
+  } break;
   case JcTknTypeCast:
   {
    TknStr = CStr("cast");
@@ -538,7 +542,7 @@ JcTknPrintMut(a8 *A, jc_tkn *Tkn)
  else
  {
   // atomic
-  JcA8PrintMut(A, A8(Tkn->Mem, Tkn->Ln));
+  JcA8PrintMut(A, TknStr);
  }
 }
 
@@ -665,7 +669,7 @@ JcEatTypeChain(jc_tkn_arr *TknView)
   Cur->First = Prev;
   Prev = Cur;
  }
- return Prev;
+ return Prev ? Prev : &JcTknGlobalEof;
 }
 
 // eat all const / volatile / restrict
@@ -686,18 +690,18 @@ JcEatPtrChain(jc_tkn_arr *TknView)
   Cur->First = Prev;
   Prev = Cur;
  }
- return Prev;
+ return Prev ? Prev : &JcTknGlobalEof;
 }
-
 
 static jc_tkn *
 JcEatNestedPtr(jc_tkn_arr *TknView)
 {
+ jc_tkn *Ret = &JcTknGlobalEof;
  jc_tkn *LParen = JcTknArrEatIfKind(TknView, JcTknLParen);
  if (LParen->Kind == JcTknLParen)
  {
   jc_tkn *PtrChain = JcEatPtrChain(TknView);
-  if (PtrChain)
+  if (PtrChain->Kind != JcTknEof)
   {
    jc_tkn *PtrChainBottom = PtrChain;
    while (PtrChainBottom->First) PtrChainBottom = PtrChainBottom->First;
@@ -739,11 +743,11 @@ JcEatNestedPtr(jc_tkn_arr *TknView)
        // do nothing
       } break;
      }
-     return PtrChain;
+     Ret = PtrChain;
     } break;
     case JcTknLParen:
     {
-     return JcEatNestedPtr(TknView);
+     Ret = JcEatNestedPtr(TknView);
     } break;
     default: 
     {
@@ -756,7 +760,7 @@ JcEatNestedPtr(jc_tkn_arr *TknView)
    puts("Error expected pointer");
   }
  }
- return 0;
+ return Ret;
 }
 
 static jc_tkn *
@@ -764,7 +768,7 @@ JcEatTypeName(jc_tkn_arr *TknView)
 {
  jc_tkn *TypeChain = JcEatTypeChain(TknView);
  jc_tkn *NestedPtr = JcEatNestedPtr(TknView);
- if (NestedPtr)
+ if (TypeChain->Kind != JcTknEof && NestedPtr->Kind != JcTknEof)
  {
   // get outermost ptr to append typechain to
   jc_tkn *LastPtr = NestedPtr;
@@ -797,8 +801,7 @@ JcEatPrefix(jc_tkn_arr *TknView)
   {
    Lhs->Kind = JcTknTypeCast;
    Lhs->First = JcEatTypeName(TknView);
-   jc_tkn *RParen = JcTknArrEatRelevant(TknView); //todo this may need to be a peek then eat
-   if (RParen->Kind != JcTknRParen)
+   if (JcTknArrEatIfKind(TknView, JcTknRParen)->Kind != JcTknRParen)
    {
     puts("Error no closing paren found");
     return 0;
