@@ -52,7 +52,7 @@ Test()
  TestExprRecursive(&FailCnt, CStr("(long *(**))3"), CStr("(cast 3 (* (* (* long))))"));
  TestExprRecursive(&FailCnt, CStr("(long (* restrict const const * const volatile))3"), CStr("(cast 3 (volatile (const (* (const (const (restrict (* long))))))))"));
  TestExprRecursive(&FailCnt, CStr("(int (*)[2 + 2][3 * 3][4 / 4])3"), CStr("(cast 3 (* int (lbrack (+ 2 2)) (lbrack (* 3 3)) (lbrack (/ 4 4))))"));
- TestExprRecursive(&FailCnt, CStr("(int (*(*(*)(double, char *))[5])(long, ...))3"), CStr("(cast 3 (* (* (* int (lparen long ...)) (lbrack 5)) (lparen double (* char))))"));
+ TestExprRecursive(&FailCnt, CStr("(int (*(*(*)(double, char *))[5][6])(long, ...))3"), CStr("(cast 3 (* (* (* int (lparen long ...)) (lbrack 5) (lbrack 6)) (lparen double (* char))))"));
 
  int (*bar)() = (int (*)())boo;
  (int (*(*)(double (*)(int, char)))(long, ...))0;
