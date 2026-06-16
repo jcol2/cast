@@ -514,42 +514,21 @@ JcTknPrintMut(a8 *A, jc_tkn *Tkn)
   } break;
  }
 
- if (Tkn->First && Tkn->First->Next && Tkn->First->Next->Next)
+ // has children?
+ if (Tkn->First)
  {
-  // ternary
   JcA8PrintMut(A, CStr("("));
   JcA8PrintMut(A, TknStr);
-  JcA8PrintMut(A, CStr(" "));
-  JcTknPrintMut(A, Tkn->First);
-  JcA8PrintMut(A, CStr(" "));
-  JcTknPrintMut(A, Tkn->First->Next);
-  JcA8PrintMut(A, CStr(" "));
-  JcTknPrintMut(A, Tkn->First->Next->Next);
-  JcA8PrintMut(A, CStr(")"));
- }
- else if (Tkn->First && Tkn->First->Next)
- {
-  // binary op
-  JcA8PrintMut(A, CStr("("));
-  JcA8PrintMut(A, TknStr);
-  JcA8PrintMut(A, CStr(" "));
-  JcTknPrintMut(A, Tkn->First);
-  JcA8PrintMut(A, CStr(" "));
-  JcTknPrintMut(A, Tkn->First->Next);
-  JcA8PrintMut(A, CStr(")"));
- }
- else if (Tkn->First)
- {
-  // unary op
-  JcA8PrintMut(A, CStr("("));
-  JcA8PrintMut(A, TknStr);
-  JcA8PrintMut(A, CStr(" "));
-  JcTknPrintMut(A, Tkn->First);
+  for (jc_tkn *CurTkn = Tkn->First; CurTkn; CurTkn = CurTkn->Next)
+  {
+   JcA8PrintMut(A, CStr(" "));
+   JcTknPrintMut(A, CurTkn);
+  }
   JcA8PrintMut(A, CStr(")"));
  }
  else
  {
-  // atomic
+  // leaf node
   JcA8PrintMut(A, TknStr);
  }
 }
@@ -745,20 +724,35 @@ JcEatNestedPtr(jc_tkn_arr *TknView)
      // eat array brackets
      case JcTknLBrack:
      {
-      JcTknArrEatRelevant(TknView);
-      jc_tkn *Expr = JcExprRecursive(TknView, JcTknEof);
-      if (Expr->Kind != JcTknEof) //todo error detection?
+      jc_tkn *LastBrack = 0;
+      jc_tkn *CurBrack = 0;
+      while ((CurBrack = JcTknArrEatIfKind(TknView, JcTknLBrack))->Kind == JcTknLBrack)
       {
-       PtrChainBottom->First = SuffixPeek;
-       SuffixPeek->First = Expr;
-       if (JcTknArrEatIfKind(TknView, JcTknRBrack)->Kind != JcTknRBrack)
+       if (LastBrack)
        {
-        puts("Error expected closing bracket");
+        LastBrack->Next = CurBrack;
        }
-      }
-      else
-      {
-       puts("Error expected expression");
+       else
+       {
+        PtrChainBottom->First = SuffixPeek;
+       }
+
+       jc_tkn *Expr = JcExprRecursive(TknView, JcTknEof);
+       if (Expr->Kind != JcTknEof)
+       {
+        CurBrack->First = Expr;
+        if (JcTknArrEatIfKind(TknView, JcTknRBrack)->Kind != JcTknRBrack)
+        {
+         puts("Error expected closing bracket");
+         break;
+        }
+       }
+       else
+       {
+        puts("Error expected expression");
+        break;
+       }
+       LastBrack = CurBrack;
       }
      } break;
      // eat params
@@ -865,7 +859,7 @@ JcEatPrefix(jc_tkn_arr *TknView)
    if (JcTknArrEatIfKind(TknView, JcTknRParen)->Kind != JcTknRParen)
    {
     puts("Error no closing paren found");
-    return 0;
+    return &JcTknGlobalEof;
    }
    jc_tkn *Rhs = JcExprRecursive(TknView, Lhs->Kind);
    SLLStackPush(Lhs->First, Rhs);
@@ -877,7 +871,7 @@ JcEatPrefix(jc_tkn_arr *TknView)
    if (RParen->Kind != JcTknRParen)
    {
     puts("Error no closing paren found");
-    return 0;
+    return &JcTknGlobalEof;
    }
   }
  }
@@ -887,7 +881,7 @@ JcEatPrefix(jc_tkn_arr *TknView)
  else if (Lhs->Kind != JcTknNum)
  {
   puts("Error wrong start tkn");
-  return 0;
+  return &JcTknGlobalEof;
  }
 
  return Lhs;
@@ -898,73 +892,76 @@ JcExprRecursive(jc_tkn_arr *TknView, jc_tkn_kind OpL)
 {
  jc_tkn *Lhs = JcEatPrefix(TknView);
 
- for (;;)
+ if (Lhs->Kind != JcTknEof)
  {
-  jc_tkn *Op = JcTknArrPeekRelevant(TknView);
-  if (Op->Kind == JcTknEof)
+  for (;;)
   {
-   break;
-  }
-
-  if (JcOpInfixRightBindsTighter(OpL, Op->Kind))
-  {
-   JcTknArrEatRelevant(TknView);
-
-   // postfix unary, arr subscript, or binary?
-   if (Op->Kind == JcTknPostfixIncrement || Op->Kind == JcTknPostfixDecrement)
+   jc_tkn *Op = JcTknArrPeekRelevant(TknView);
+   if (Op->Kind == JcTknEof)
    {
-    // todo proper inserts
-    Op->First = Lhs;
-    Lhs = Op;
+    break;
    }
-   else if (Op->Kind == JcTknLBrack)
+
+   if (JcOpInfixRightBindsTighter(OpL, Op->Kind))
    {
-    jc_tkn *Rhs = JcExprRecursive(TknView, JcTknEof);
-    jc_tkn *RBrack = JcTknArrEatRelevant(TknView);
-    if (RBrack->Kind == JcTknRBrack)
+    JcTknArrEatRelevant(TknView);
+
+    // postfix unary, arr subscript, or binary?
+    if (Op->Kind == JcTknPostfixIncrement || Op->Kind == JcTknPostfixDecrement)
     {
+     // todo proper inserts
+     Op->First = Lhs;
+     Lhs = Op;
+    }
+    else if (Op->Kind == JcTknLBrack)
+    {
+     jc_tkn *Rhs = JcExprRecursive(TknView, JcTknEof);
+     jc_tkn *RBrack = JcTknArrEatRelevant(TknView);
+     if (RBrack->Kind == JcTknRBrack)
+     {
+      // todo proper inserts
+      Op->First = Lhs;
+      Lhs->Next = Rhs;
+      Lhs = Op;
+     }
+     else
+     {
+      puts("Error expected closing bracket");
+      return 0;
+     }
+    }
+    else if (Op->Kind == JcTknTernary)
+    {
+     jc_tkn *Mhs = JcExprRecursive(TknView, JcTknEof);
+     jc_tkn *Colon = JcTknArrEatRelevant(TknView);
+     if (Colon->Kind == JcTknColon)
+     {
+      jc_tkn *Rhs = JcExprRecursive(TknView, Op->Kind);
+      // todo proper inserts
+      Op->First = Lhs;
+      Lhs->Next = Mhs;
+      Mhs->Next = Rhs;
+      Lhs = Op;
+     }
+     else
+     {
+      puts("Error expected colon for ternary");
+      return 0;
+     }
+    }
+    else
+    {
+     jc_tkn *Rhs = JcExprRecursive(TknView, Op->Kind);
      // todo proper inserts
      Op->First = Lhs;
      Lhs->Next = Rhs;
      Lhs = Op;
     }
-    else
-    {
-     puts("Error expected closing bracket");
-     return 0;
-    }
-   }
-   else if (Op->Kind == JcTknTernary)
-   {
-    jc_tkn *Mhs = JcExprRecursive(TknView, JcTknEof);
-    jc_tkn *Colon = JcTknArrEatRelevant(TknView);
-    if (Colon->Kind == JcTknColon)
-    {
-     jc_tkn *Rhs = JcExprRecursive(TknView, Op->Kind);
-     // todo proper inserts
-     Op->First = Lhs;
-     Lhs->Next = Mhs;
-     Mhs->Next = Rhs;
-     Lhs = Op;
-    }
-    else
-    {
-     puts("Error expected colon for ternary");
-     return 0;
-    }
    }
    else
    {
-    jc_tkn *Rhs = JcExprRecursive(TknView, Op->Kind);
-    // todo proper inserts
-    Op->First = Lhs;
-    Lhs->Next = Rhs;
-    Lhs = Op;
+    break;
    }
-  }
-  else
-  {
-   break;
   }
  }
  return Lhs;
